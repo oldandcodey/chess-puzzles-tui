@@ -9,6 +9,18 @@ and Yahtzee scorekeepers.
 
 **Site:** https://oldandcodey.github.io/chess-puzzles-tui/
 
+## Screenshots
+
+Drawn by the app. The board shots are puzzle 01J5O, mate in 1, white to move.
+
+| Menu | Endings setup | Solving |
+|------|---------------|---------|
+| ![Main menu](docs/screenshots/menu.png) | ![Endings setup, with the board and piece list](docs/screenshots/setup.png) | ![Solving, with the first-move hint](docs/screenshots/solving.png) |
+
+| Review | Progress |
+|--------|----------|
+| ![Review, with the solution and grade keys](docs/screenshots/review.png) | ![Progress for this session](docs/screenshots/progress.png) |
+
 ## Run
 
 ```bash

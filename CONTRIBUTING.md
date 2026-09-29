@@ -31,6 +31,7 @@ cargo test
 - Do not commit `data/progress*.json`. Those files are runtime history (still to be written) and are already listed in `.gitignore`.
 - Grades are self-reported. Do not add engine validation of the player's moves unless that is discussed first.
 - Prefer small, focused PRs. `rustfmt` defaults are fine.
+- `docs/screenshots/` is what the README and the site show. Refresh those pictures when a screen's layout or copy changes.
 
 ## License
 
