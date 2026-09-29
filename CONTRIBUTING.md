@@ -5,7 +5,7 @@ Thanks for taking an interest in **chess-puzzles-tui**.
 ## Build
 
 ```bash
-git clone https://github.com/bpelleti/chess-puzzles-tui.git
+git clone https://github.com/oldandcodey/chess-puzzles-tui.git
 cd chess-puzzles-tui
 cargo build --release
 chmod +x play   # the clone may not keep the executable bit
