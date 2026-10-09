@@ -89,8 +89,10 @@ Puzzle data: [Lichess open database](https://database.lichess.org/), released un
 - **Week 2 (done):** Endings drill - pick puzzle by level, ASCII board + piece list for
   board setup, configurable timer, reveal solution, self-grade (Y / 2nd try / hint / N).
   Session tallies show on Progress; they are not saved.
-- **Week 3:** [Save progress](https://github.com/oldandcodey/chess-puzzles-tui/issues/2) —
-  history JSON (`data/progress.json`), points, per-level stats.
+- **Week 3 (done):** [Save progress](https://github.com/oldandcodey/chess-puzzles-tui/issues/2) -
+  each graded attempt is appended to `data/progress.json` (gitignored) with points
+  (solved 3/5/8 for mate in 1/2/3, second try half rounded down, hint 1, missed 0).
+  Progress shows all-time and per-level totals plus this session.
 - **Week 4:** the repo is published, and the site source is `docs/` on `main`. Still open:
   [celebration on a clean solve](https://github.com/oldandcodey/chess-puzzles-tui/issues/1).
 

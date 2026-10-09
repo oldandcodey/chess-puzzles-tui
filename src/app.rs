@@ -1,11 +1,14 @@
-//! App state. Menu, endings drill, and a session-only progress tally.
+//! App state. Menu, endings drill, and progress.
 //!
-//! Grades live in memory for this process. Writing `data/progress.json` is
-//! the week 3 leg.
+//! Session tallies are the in-memory view of this sitting. When the app is
+//! started with [`App::with_progress`], each graded attempt is appended to
+//! the history file. Leaving a puzzle before grading writes nothing.
 
+use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::pack::{Pack, Puzzle};
+use crate::progress::{self, History, Record};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -40,6 +43,7 @@ pub struct Attempt {
     pub hint_used: bool,
     pub elapsed_secs: u64,
     pub timer_secs: u64,
+    pub points: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -69,14 +73,20 @@ pub struct App {
     pub timer_secs: u64,
     pub hint_used: bool,
     pub attempts: Vec<Attempt>,
+    /// Last save error. The Progress screen shows this and any load warning.
+    pub save_warning: Option<String>,
     pub quit: bool,
     /// Place in each mate-in level (pack order, which is rating order).
     index: [usize; 3],
     started: Option<Instant>,
     elapsed_at_review: u64,
+    /// Set when graded attempts should be appended to this file.
+    progress_path: Option<PathBuf>,
+    history: History,
 }
 
 impl App {
+    /// Session-only app. Does not read or write a progress file.
     pub fn new(pack: Pack) -> Self {
         App {
             pack,
@@ -87,11 +97,27 @@ impl App {
             timer_secs: default_timer(1),
             hint_used: false,
             attempts: Vec::new(),
+            save_warning: None,
             quit: false,
             index: [0; 3],
             started: None,
             elapsed_at_review: 0,
+            progress_path: None,
+            history: History::default(),
         }
+    }
+
+    /// Load history from `path` and append each graded attempt to it.
+    pub fn with_progress(pack: Pack, path: PathBuf) -> Self {
+        let history = History::load(&path);
+        let mut app = Self::new(pack);
+        app.progress_path = Some(path);
+        app.history = history;
+        app
+    }
+
+    pub fn history(&self) -> &History {
+        &self.history
     }
 
     pub fn current(&self) -> Option<&Puzzle> {
@@ -297,13 +323,35 @@ impl App {
         let Some((puzzle_id, mate_in)) = self.current().map(|p| (p.id.clone(), p.mate_in)) else {
             return;
         };
+        let hint_used = self.hint_used;
+        let elapsed_secs = self.elapsed_secs();
+        let timer_secs = self.timer_secs;
+        let scored = progress::points(mate_in, grade, hint_used);
+        if let Some(path) = self.progress_path.clone() {
+            let record = Record {
+                at: chrono::Local::now().to_rfc3339(),
+                puzzle_id: puzzle_id.clone(),
+                mate_in,
+                grade: progress::grade_key(grade).to_string(),
+                hint_used,
+                elapsed_secs,
+                timer_secs,
+                points: scored,
+            };
+            if let Err(err) = self.history.append(&path, record) {
+                self.save_warning = Some(err);
+            } else {
+                self.save_warning = None;
+            }
+        }
         self.attempts.push(Attempt {
             puzzle_id,
             mate_in,
             grade,
-            hint_used: self.hint_used,
-            elapsed_secs: self.elapsed_secs(),
-            timer_secs: self.timer_secs,
+            hint_used,
+            elapsed_secs,
+            timer_secs,
+            points: scored,
         });
         self.abandon_attempt();
         self.cycle_puzzle(1);

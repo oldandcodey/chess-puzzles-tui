@@ -2,4 +2,5 @@
 pub mod app;
 pub mod board;
 pub mod pack;
+pub mod progress;
 pub mod ui;

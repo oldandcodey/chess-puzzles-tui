@@ -214,6 +214,7 @@ fn hint_reveal_and_grade_record_a_session_attempt() {
     assert_eq!(app.attempts[0].grade, Grade::SecondTry);
     assert!(app.attempts[0].hint_used);
     assert_eq!(app.attempts[0].mate_in, 1);
+    assert_eq!(app.attempts[0].points, 1);
     assert_ne!(app.current().unwrap().id, id);
     assert_eq!(app.session_counts().second, 1);
 
@@ -229,15 +230,18 @@ fn hint_reveal_and_grade_record_a_session_attempt() {
     app.on_char('r');
     app.on_char('h');
     assert_eq!(app.attempts[1].grade, Grade::Hint);
+    assert_eq!(app.attempts[1].points, 1);
     app.enter();
     app.on_char('r');
     app.on_char('n');
     assert_eq!(app.attempts[2].grade, Grade::Missed);
+    assert_eq!(app.attempts[2].points, 0);
     app.enter();
     app.on_char('r');
     app.on_char('y');
     assert_eq!(app.attempts[3].grade, Grade::Solved);
     assert!(!app.attempts[3].hint_used);
+    assert_eq!(app.attempts[3].points, 3);
 
     app.back();
     app.on_char('p');
@@ -247,7 +251,14 @@ fn hint_reveal_and_grade_record_a_session_attempt() {
     assert!(progress.contains("second 1"), "{progress}");
     assert!(progress.contains("hint 1"), "{progress}");
     assert!(progress.contains("missed 1"), "{progress}");
-    assert!(progress.contains("week 3"), "{progress}");
+    assert!(
+        progress.contains("All time (data/progress.json)"),
+        "{progress}"
+    );
+    assert!(progress.contains("This session"), "{progress}");
+    assert!(progress.contains("points"), "{progress}");
+    assert!(!progress.contains("week 3"), "{progress}");
+    assert!(!progress.contains("not saved"), "{progress}");
 }
 
 #[test]

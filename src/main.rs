@@ -13,6 +13,7 @@ use ratatui::Terminal;
 
 use chess_puzzles_tui::app::App;
 use chess_puzzles_tui::pack::{pack_path, Pack};
+use chess_puzzles_tui::progress::progress_path;
 use chess_puzzles_tui::ui;
 
 fn main() {
@@ -25,7 +26,7 @@ fn main() {
 fn run() -> Result<(), String> {
     let pack = Pack::load(&pack_path())
         .map_err(|e| format!("{e}\n\nHint: run from the project root (use ./play)."))?;
-    let mut app = App::new(pack);
+    let mut app = App::with_progress(pack, progress_path());
 
     enable_raw_mode().map_err(|e| e.to_string())?;
     let mut out = stdout();

@@ -12,6 +12,7 @@ use crate::board::{
     row_cells, PieceLine, BOARD_WIDTH,
 };
 use crate::pack::Puzzle;
+use crate::progress::Totals;
 
 const GOLD: Color = Color::Rgb(240, 200, 80);
 const CYAN: Color = Color::Rgb(100, 190, 230);
@@ -356,38 +357,94 @@ fn theme_blurb(themes: &[String]) -> Option<String> {
 }
 
 fn draw_progress(f: &mut Frame, app: &App, area: Rect) {
+    let history = app.history();
     let mut lines = vec![
-        Line::from(""),
         Line::from(Span::styled(
-            "  This session (not saved yet)",
+            "  All time (data/progress.json)",
             Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
         )),
-        tally_line("All", app.session_counts()),
+        tally_line("All", history.totals()),
     ];
     for level in 1..=3 {
         lines.push(tally_line(
             &format!("Mate in {level}"),
-            app.session_counts_for(level),
+            history.totals_for(level),
         ));
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  Saved history, points, and a record file land in week 3.",
-        Style::default().fg(CYAN),
+        "  This session",
+        Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
     )));
+    lines.push(tally_line("All", session_totals(app, None)));
+    for level in 1..=3 {
+        lines.push(tally_line(
+            &format!("Mate in {level}"),
+            session_totals(app, Some(level)),
+        ));
+    }
+    if let Some(note) = progress_note(app) {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  {note}"),
+            Style::default().fg(AMBER),
+        )));
+    }
     f.render_widget(Paragraph::new(lines).block(block("Progress")), area);
 }
 
-fn tally_line(label: &str, t: crate::app::SessionTally) -> Line<'static> {
+fn session_totals(app: &App, level: Option<u8>) -> Totals {
+    let counts = match level {
+        Some(mate_in) => app.session_counts_for(mate_in),
+        None => app.session_counts(),
+    };
+    let points = app
+        .attempts
+        .iter()
+        .filter(|attempt| level.is_none_or(|mate_in| attempt.mate_in == mate_in))
+        .map(|attempt| attempt.points)
+        .sum();
+    Totals {
+        solved: counts.solved,
+        second: counts.second,
+        hint: counts.hint,
+        missed: counts.missed,
+        attempts: counts.solved + counts.second + counts.hint + counts.missed,
+        points,
+    }
+}
+
+fn progress_note(app: &App) -> Option<String> {
+    let load = app.history().warning();
+    let save = app.save_warning.as_deref();
+    match (load, save) {
+        (Some(load), Some(save)) if load != save => Some(format!("{load}; {save}")),
+        (Some(text), _) | (_, Some(text)) => Some(text.to_string()),
+        (None, None) => None,
+    }
+}
+
+fn tally_line(label: &str, t: Totals) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("  {label:<10}"), Style::default().fg(MUTED)),
+        Span::styled(format!("  {label:<9}"), Style::default().fg(MUTED)),
         Span::styled(
-            format!("solved {:<3}", t.solved),
+            format!("solved {:<3} ", t.solved),
             Style::default().fg(GREEN),
         ),
-        Span::styled(format!("second {:<3}", t.second), Style::default().fg(GOLD)),
-        Span::styled(format!("hint {:<3}", t.hint), Style::default().fg(CYAN)),
-        Span::styled(format!("missed {:<3}", t.missed), Style::default().fg(TEXT)),
+        Span::styled(
+            format!("second {:<3} ", t.second),
+            Style::default().fg(GOLD),
+        ),
+        Span::styled(format!("hint {:<3} ", t.hint), Style::default().fg(CYAN)),
+        Span::styled(
+            format!("missed {:<3} ", t.missed),
+            Style::default().fg(TEXT),
+        ),
+        Span::styled(
+            format!("attempts {:<3} ", t.attempts),
+            Style::default().fg(TEXT),
+        ),
+        Span::styled(format!("points {}", t.points), Style::default().fg(GOLD)),
     ])
 }
 
