@@ -8,7 +8,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn pack() -> Pack {
-    Pack::load(&pack_path()).expect("data/puzzles.json loads")
+    Pack::load(&pack_path()).expect("puzzle pack loads")
 }
 
 fn render(app: &App, w: u16, h: u16) -> String {

@@ -2,5 +2,6 @@
 pub mod app;
 pub mod board;
 pub mod pack;
+pub mod paths;
 pub mod progress;
 pub mod ui;

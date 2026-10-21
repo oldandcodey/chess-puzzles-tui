@@ -50,7 +50,7 @@ impl Pack {
     }
 }
 
-/// Pack path relative to the CWD (`./play` cds to the project root).
+/// Pack path; see `crate::paths`.
 pub fn pack_path() -> PathBuf {
-    PathBuf::from("data").join("puzzles.json")
+    crate::paths::pack_file()
 }

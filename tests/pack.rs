@@ -2,7 +2,7 @@ use chess_puzzles_tui::app::{App, Screen};
 use chess_puzzles_tui::pack::{pack_path, Pack};
 
 fn pack() -> Pack {
-    Pack::load(&pack_path()).expect("data/puzzles.json loads")
+    Pack::load(&pack_path()).expect("puzzle pack loads")
 }
 
 #[test]
