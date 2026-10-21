@@ -8,7 +8,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn pack() -> Pack {
-    Pack::load(&pack_path()).expect("data/puzzles.json loads")
+    Pack::load(&pack_path()).expect("puzzle pack loads")
 }
 
 struct Tmp {
@@ -168,7 +168,7 @@ fn points_cover_every_grade_level_and_hint() {
 
 #[test]
 fn progress_path_is_beside_the_pack() {
-    assert_eq!(progress_path(), PathBuf::from("data").join("progress.json"));
+    assert_eq!(progress_path(), chess_puzzles_tui::paths::progress_file());
 }
 
 #[test]

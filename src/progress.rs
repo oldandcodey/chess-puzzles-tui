@@ -263,7 +263,7 @@ fn sibling(path: &Path, file_name: &str) -> PathBuf {
     }
 }
 
-/// Progress path relative to the CWD (`./play` cds to the project root).
+/// Progress path; see `crate::paths`.
 pub fn progress_path() -> PathBuf {
-    PathBuf::from("data").join("progress.json")
+    crate::paths::progress_file()
 }
