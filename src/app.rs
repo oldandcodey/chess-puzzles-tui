@@ -5,10 +5,20 @@
 //! the history file. Leaving a puzzle before grading writes nothing.
 
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::pack::{Pack, Puzzle};
 use crate::progress::{self, History, Record};
+
+/// How long the clean-solve celebration stays up when no key is pressed.
+pub const CELEBRATION_DURATION: Duration = Duration::from_millis(1_500);
+
+/// A clean solve is grade Y with no hint taken during the attempt.
+///
+/// A hinted solve, a second try, and a miss do not celebrate.
+pub fn is_clean_solve(grade: Grade, hint_used: bool) -> bool {
+    grade == Grade::Solved && !hint_used
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -64,6 +74,15 @@ const TIMER_MIN: u64 = 30;
 const TIMER_MAX: u64 = 30 * 60;
 const TIMER_STEP: u64 = 30;
 
+/// What the celebration screen shows. The attempt is already recorded.
+#[derive(Debug, Clone)]
+pub struct Celebration {
+    pub puzzle_id: String,
+    pub mate_in: u8,
+    pub points: u32,
+    until: Instant,
+}
+
 pub struct App {
     pub pack: Pack,
     pub screen: Screen,
@@ -83,6 +102,9 @@ pub struct App {
     /// Set when graded attempts should be appended to this file.
     progress_path: Option<PathBuf>,
     history: History,
+    /// When false, a clean solve does not flash a celebration.
+    celebrations_enabled: bool,
+    celebration: Option<Celebration>,
 }
 
 impl App {
@@ -104,6 +126,40 @@ impl App {
             elapsed_at_review: 0,
             progress_path: None,
             history: History::default(),
+            celebrations_enabled: true,
+            celebration: None,
+        }
+    }
+
+    /// Turn the clean-solve celebration on or off. Off is `--no-celebration`.
+    pub fn set_celebrations_enabled(&mut self, enabled: bool) {
+        self.celebrations_enabled = enabled;
+        if !enabled {
+            self.celebration = None;
+        }
+    }
+
+    pub fn celebration(&self) -> Option<&Celebration> {
+        self.celebration.as_ref()
+    }
+
+    pub fn showing_celebration(&self) -> bool {
+        self.celebration.is_some()
+    }
+
+    pub fn celebration_deadline(&self) -> Option<Instant> {
+        self.celebration.as_ref().map(|c| c.until)
+    }
+
+    /// Drop the celebration. Any key does this, and the key still runs.
+    pub fn dismiss_celebration(&mut self) {
+        self.celebration = None;
+    }
+
+    /// Hide the celebration once `now` has reached its deadline.
+    pub fn tick_at(&mut self, now: Instant) {
+        if self.celebration.as_ref().is_some_and(|c| now >= c.until) {
+            self.celebration = None;
         }
     }
 
@@ -175,6 +231,7 @@ impl App {
     }
 
     pub fn on_char(&mut self, c: char) {
+        self.dismiss_celebration();
         let c = c.to_ascii_lowercase();
         match self.screen {
             Screen::Menu => match c {
@@ -193,30 +250,35 @@ impl App {
     }
 
     pub fn up(&mut self) {
+        self.dismiss_celebration();
         if self.screen == Screen::Menu {
             self.menu_sel = (self.menu_sel + MENU_ITEMS.len() - 1) % MENU_ITEMS.len();
         }
     }
 
     pub fn down(&mut self) {
+        self.dismiss_celebration();
         if self.screen == Screen::Menu {
             self.menu_sel = (self.menu_sel + 1) % MENU_ITEMS.len();
         }
     }
 
     pub fn left(&mut self) {
+        self.dismiss_celebration();
         if self.screen == Screen::Endings {
             self.cycle_puzzle(-1);
         }
     }
 
     pub fn right(&mut self) {
+        self.dismiss_celebration();
         if self.screen == Screen::Endings {
             self.cycle_puzzle(1);
         }
     }
 
     pub fn enter(&mut self) {
+        self.dismiss_celebration();
         match self.screen {
             Screen::Menu => self.activate(self.menu_sel),
             Screen::Endings => self.start(),
@@ -228,6 +290,7 @@ impl App {
     /// no grade. From setup (or any other screen), return to the menu.
     /// From the menu, quit.
     pub fn back(&mut self) {
+        self.dismiss_celebration();
         match self.screen {
             Screen::Menu => self.quit = true,
             Screen::Endings if self.phase != Phase::Setup => self.abandon_attempt(),
@@ -345,7 +408,7 @@ impl App {
             }
         }
         self.attempts.push(Attempt {
-            puzzle_id,
+            puzzle_id: puzzle_id.clone(),
             mate_in,
             grade,
             hint_used,
@@ -353,8 +416,18 @@ impl App {
             timer_secs,
             points: scored,
         });
+        // The next puzzle is loaded the same way as every other grade.
+        // The celebration only hides it until the deadline or the next key.
+        // That key is not swallowed, so the drill never waits on the flash.
+        let celebrate = self.celebrations_enabled && is_clean_solve(grade, hint_used);
         self.abandon_attempt();
         self.cycle_puzzle(1);
+        self.celebration = celebrate.then(|| Celebration {
+            puzzle_id,
+            mate_in,
+            points: scored,
+            until: Instant::now() + CELEBRATION_DURATION,
+        });
     }
 
     fn cycle_puzzle(&mut self, dir: isize) {

@@ -28,6 +28,7 @@ git clone https://github.com/oldandcodey/chess-puzzles-tui.git
 cd chess-puzzles-tui
 chmod +x play    # once, if the clone did not keep the executable bit
 ./play           # builds the release binary on first run, then launches it
+./play --no-celebration   # same drill, without the clean-solve flash
 cargo test       # pack, board, and drill checks
 ```
 
@@ -41,6 +42,7 @@ relative to the CWD. Over SSH, `export TERM=xterm-256color` if colors look off.
 | Endings setup | `1`/`2`/`3` level, `N`/Right next, `B`/Left previous, `+`/`-` time, Enter start, `Q`/Esc menu |
 | Solving       | `H` first-move hint, `R` reveal the line, `Q`/Esc back to setup (no grade) |
 | Review        | `Y` solved, `2` second try, `H` used a hint, `N` missed, `Q`/Esc cancel |
+| Celebration   | After a clean solve, about a second and a half. Any key skips it. |
 | Progress      | `Q`/Esc back. Shows this session's grades. Saving them is [issue #2](https://github.com/oldandcodey/chess-puzzles-tui/issues/2). |
 
 ## Endings drill
@@ -49,7 +51,7 @@ relative to the CWD. Over SSH, `export TERM=xterm-256color` if colors look off.
 2. The board is white at the bottom, a1 at the lower left. Empty dark squares are `.`, light squares are `:`. Uppercase letters are white pieces and lowercase are black. The piece list is what you set on a real board.
 3. Timer defaults are **1:00 / 3:00 / 5:00**. `+` and `-` step 30 seconds (0:30 through 30:00) before Enter starts the clock. The clock turns amber under 10 seconds and counts up in red after it runs out; it does not auto-fail you.
 4. `H` shows only the first move. `R` shows the whole mate and stops the clock.
-5. Grade yourself. That stores a session result and loads the next puzzle. Esc before grading drops the attempt.
+5. Grade yourself. That stores a session result and loads the next puzzle. Esc before grading drops the attempt. A clean solve (Y, and no hint during the attempt) flashes a short ASCII celebration before the next puzzle is drawn. Any key skips the flash and is still handled, so the drill does not wait. `./play --no-celebration` turns it off.
 
 Grades last until you quit. Nothing is written to disk yet.
 
@@ -93,8 +95,7 @@ Puzzle data: [Lichess open database](https://database.lichess.org/), released un
   each graded attempt is appended to `data/progress.json` (gitignored) with points
   (solved 3/5/8 for mate in 1/2/3, second try half rounded down, hint 1, missed 0).
   Progress shows all-time and per-level totals plus this session.
-- **Week 4:** the repo is published, and the site source is `docs/` on `main`. Still open:
-  [celebration on a clean solve](https://github.com/oldandcodey/chess-puzzles-tui/issues/1).
+- **Week 4:** the repo is published, and the site source is `docs/` on `main`. A clean solve flashes a short ASCII celebration ([issue #1](https://github.com/oldandcodey/chess-puzzles-tui/issues/1)). `--no-celebration` turns it off.
 
 Out of scope for the Lean MVP: openings trainer, typed-move validation.
 

@@ -21,4 +21,4 @@ if [ ! -x "$BIN" ] || [ -n "$(find src Cargo.toml Cargo.lock -newer "$BIN" -prin
   echo "Building Chess Puzzles..."
   cargo build --release
 fi
-exec "$BIN"
+exec "$BIN" "$@"
