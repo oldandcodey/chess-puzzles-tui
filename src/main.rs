@@ -1,7 +1,7 @@
 //! Chess Puzzles TUI. Loads `data/puzzles.json` (relative to CWD) at startup.
 
 use std::io::{self, stdout};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
@@ -48,12 +48,14 @@ fn event_loop(
     app: &mut App,
 ) -> Result<(), String> {
     while !app.quit {
-        app.tick_at(Instant::now());
+        let now = Instant::now();
+        app.tick_at(now);
         terminal
             .draw(|f| ui::draw(f, app))
             .map_err(|e| e.to_string())?;
-        // Timeout redraws the countdown, and lets a celebration end, without a keypress.
-        if !event::poll(Duration::from_millis(250)).map_err(|e| e.to_string())? {
+        // Timeout redraws the countdown, and lets a celebration or a reply land.
+        let wait = app.wake_timeout(Instant::now());
+        if !event::poll(wait).map_err(|e| e.to_string())? {
             continue;
         }
         let Event::Key(key) = event::read().map_err(|e| e.to_string())? else {
@@ -62,7 +64,12 @@ fn event_loop(
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        // Any key skips the celebration. The key is still handled below.
+        // Tab toggles the piece list and does not dismiss the celebration.
+        // Every other key skips the celebration, then still runs.
+        if key.code == KeyCode::Tab {
+            app.toggle_pieces();
+            continue;
+        }
         app.dismiss_celebration();
         match key.code {
             KeyCode::Esc => app.back(),
@@ -71,6 +78,9 @@ fn event_loop(
             KeyCode::Left => app.left(),
             KeyCode::Right => app.right(),
             KeyCode::Enter => app.enter(),
+            KeyCode::Backspace => app.backspace(),
+            KeyCode::F(1) => app.hint(),
+            KeyCode::F(2) => app.reveal(),
             KeyCode::Char(c) => app.on_char(c),
             _ => {}
         }

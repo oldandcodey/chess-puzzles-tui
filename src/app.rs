@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use crate::moves::{MoveEntry, SubmitOutcome};
 use crate::pack::{Pack, Puzzle};
 use crate::progress::{self, History, Record};
 
@@ -105,12 +106,15 @@ pub struct App {
     /// When false, a clean solve does not flash a celebration.
     celebrations_enabled: bool,
     celebration: Option<Celebration>,
+    /// Piece list beside the board. Hidden until Tab.
+    show_pieces: bool,
+    entry: MoveEntry,
 }
 
 impl App {
     /// Session-only app. Does not read or write a progress file.
     pub fn new(pack: Pack) -> Self {
-        App {
+        let mut app = App {
             pack,
             screen: Screen::Menu,
             menu_sel: 0,
@@ -128,7 +132,11 @@ impl App {
             history: History::default(),
             celebrations_enabled: true,
             celebration: None,
-        }
+            show_pieces: false,
+            entry: MoveEntry::from_puzzle("8/8/8/8/8/8/8/8 w - - 0 1", &[], &[]),
+        };
+        app.reset_line();
+        app
     }
 
     /// Turn the clean-solve celebration on or off. Off is `--no-celebration`.
@@ -160,6 +168,52 @@ impl App {
     pub fn tick_at(&mut self, now: Instant) {
         if self.celebration.as_ref().is_some_and(|c| now >= c.until) {
             self.celebration = None;
+        }
+        self.entry.tick(now);
+    }
+
+    /// How long the event loop should wait. Caps the countdown redraw at 250ms
+    /// and wakes early for a celebration or a scripted reply.
+    pub fn wake_timeout(&self, now: Instant) -> Duration {
+        let mut wait = Duration::from_millis(250);
+        for deadline in [self.celebration_deadline(), self.entry.reply_deadline()]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(left) = deadline.checked_duration_since(now) {
+                wait = wait.min(left);
+            } else {
+                return Duration::from_millis(1);
+            }
+        }
+        wait
+    }
+
+    pub fn pieces_shown(&self) -> bool {
+        self.show_pieces
+    }
+
+    /// Tab. Works in every step, including over the celebration, and does not
+    /// dismiss the celebration.
+    pub fn toggle_pieces(&mut self) {
+        self.show_pieces = !self.show_pieces;
+    }
+
+    pub fn move_entry(&self) -> &MoveEntry {
+        &self.entry
+    }
+
+    /// The move box takes keystrokes only while the clock is running, and not
+    /// during the short pause before the opponent's reply.
+    pub fn field_active(&self) -> bool {
+        self.screen == Screen::Endings
+            && self.phase == Phase::Solving
+            && !self.entry.waiting_for_reply()
+    }
+
+    pub fn backspace(&mut self) {
+        if self.field_active() {
+            self.entry.backspace();
         }
     }
 
@@ -232,6 +286,15 @@ impl App {
 
     pub fn on_char(&mut self, c: char) {
         self.dismiss_celebration();
+        if self.screen == Screen::Endings && self.phase == Phase::Solving {
+            // The clock is running, so letters belong to the move box.
+            // During the reply pause the box is quiet and the keys are not
+            // commands either.
+            if self.field_active() {
+                self.entry.push(c);
+            }
+            return;
+        }
         let c = c.to_ascii_lowercase();
         match self.screen {
             Screen::Menu => match c {
@@ -281,6 +344,7 @@ impl App {
         self.dismiss_celebration();
         match self.screen {
             Screen::Menu => self.activate(self.menu_sel),
+            Screen::Endings if self.phase == Phase::Solving => self.submit_entry(),
             Screen::Endings => self.start(),
             Screen::Progress => {}
         }
@@ -320,7 +384,8 @@ impl App {
             ' ' => self.start(),
             'r' => self.reveal(),
             'h' => match self.phase {
-                Phase::Solving => self.take_hint(),
+                // Solving never reaches here: the move box consumes letters.
+                Phase::Solving => self.hint(),
                 Phase::Review => self.grade(Grade::Hint),
                 Phase::Setup => {}
             },
@@ -339,6 +404,7 @@ impl App {
             self.timer_secs = default_timer(level);
         }
         self.hint_used = false;
+        self.reset_line();
     }
 
     fn adjust_timer(&mut self, steps: i64) {
@@ -358,9 +424,11 @@ impl App {
         self.elapsed_at_review = 0;
         self.hint_used = false;
         self.phase = Phase::Solving;
+        self.reset_line();
     }
 
-    fn take_hint(&mut self) {
+    /// F1. The first move of the line, and the attempt is no longer clean.
+    pub fn hint(&mut self) {
         if self.screen != Screen::Endings || self.phase != Phase::Solving {
             return;
         }
@@ -370,7 +438,8 @@ impl App {
         }
     }
 
-    fn reveal(&mut self) {
+    /// F2. Stop the clock and show the line for a self-grade.
+    pub fn reveal(&mut self) {
         if self.screen != Screen::Endings || self.phase != Phase::Solving {
             return;
         }
@@ -379,10 +448,29 @@ impl App {
         self.phase = Phase::Review;
     }
 
+    fn submit_entry(&mut self) {
+        if !self.field_active() {
+            return;
+        }
+        let outcome = self.entry.submit(Instant::now());
+        if outcome == SubmitOutcome::Solved {
+            let grade = if self.entry.had_wrong() {
+                Grade::SecondTry
+            } else {
+                Grade::Solved
+            };
+            self.record_grade(grade);
+        }
+    }
+
     fn grade(&mut self, grade: Grade) {
         if self.screen != Screen::Endings || self.phase != Phase::Review {
             return;
         }
+        self.record_grade(grade);
+    }
+
+    fn record_grade(&mut self, grade: Grade) {
         let Some((puzzle_id, mate_in)) = self.current().map(|p| (p.id.clone(), p.mate_in)) else {
             return;
         };
@@ -441,6 +529,7 @@ impl App {
         let next = (self.puzzle_index() as isize + dir).rem_euclid(n as isize) as usize;
         self.index[self.slot()] = next;
         self.hint_used = false;
+        self.reset_line();
     }
 
     fn abandon_attempt(&mut self) {
@@ -448,6 +537,20 @@ impl App {
         self.hint_used = false;
         self.started = None;
         self.elapsed_at_review = 0;
+        self.reset_line();
+    }
+
+    fn reset_line(&mut self) {
+        let puzzle = self.current().map(|puzzle| {
+            (
+                puzzle.puzzle_fen.clone(),
+                puzzle.solution_uci.clone(),
+                puzzle.solution_san.clone(),
+            )
+        });
+        if let Some((fen, uci, san)) = puzzle {
+            self.entry = MoveEntry::from_puzzle(&fen, &uci, &san);
+        }
     }
 
     fn slot(&self) -> usize {

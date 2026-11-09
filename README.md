@@ -39,21 +39,21 @@ relative to the CWD. Over SSH, `export TERM=xterm-256color` if colors look off.
 | Screen        | Keys                                                                 |
 |---------------|----------------------------------------------------------------------|
 | Menu          | Up/Down + Enter, `E` Endings, `P` Progress, `Q`/Esc quit             |
-| Endings setup | `1`/`2`/`3` level, `N`/Right next, `B`/Left previous, `+`/`-` time, Enter start, `Q`/Esc menu |
-| Solving       | `H` first-move hint, `R` reveal the line, `Q`/Esc back to setup (no grade) |
-| Review        | `Y` solved, `2` second try, `H` used a hint, `N` missed, `Q`/Esc cancel |
-| Celebration   | After a clean solve, about a second and a half. Any key skips it. |
+| Endings setup | `1`/`2`/`3` level, `N`/Right next, `B`/Left previous, `+`/`-` time, Enter/Space start, `Tab` pieces, `Q`/Esc menu |
+| Solving       | Type the move, Enter checks it, Backspace edits. `F1` hint, `F2` reveal, Esc setup, `Tab` pieces |
+| Review        | `Y` solved, `2` second try, `H` used a hint, `N` missed, `Tab` pieces, `Q`/Esc cancel |
+| Celebration   | After a clean solve, about a second and a half. Any key except `Tab` skips it. `Tab` toggles the piece list underneath. |
 | Progress      | `Q`/Esc back. Shows this session's grades. Saving them is [issue #2](https://github.com/oldandcodey/chess-puzzles-tui/issues/2). |
 
 ## Endings drill
 
 1. Pick mate in **1 / 2 / 3**. Each level keeps its own place in the pack (rating order).
-2. The board is white at the bottom, a1 at the lower left. Empty dark squares are `.`, light squares are `:`. Uppercase letters are white pieces and lowercase are black. The piece list is what you set on a real board.
+2. The board is white at the bottom, a1 at the lower left. Empty dark squares are `.`, light squares are `:`. Uppercase letters are white pieces and lowercase are black. `Tab` shows the piece list for setting up a real board. It is hidden until then, and the toggle works in every step.
 3. Timer defaults are **1:00 / 3:00 / 5:00**. `+` and `-` step 30 seconds (0:30 through 30:00) before Enter starts the clock. The clock turns amber under 10 seconds and counts up in red after it runs out; it does not auto-fail you.
-4. `H` shows only the first move. `R` shows the whole mate and stops the clock.
-5. Grade yourself. That stores a session result and loads the next puzzle. Esc before grading drops the attempt. A clean solve (Y, and no hint during the attempt) flashes a short ASCII celebration before the next puzzle is drawn. Any key skips the flash and is still handled, so the drill does not wait. `./play --no-celebration` turns it off.
+4. Enter or Space starts the clock. The move box then takes what you type. Standard algebraic (`Nf3`, `Qxe7+`, `O-O`, `e8=Q`) and coordinates (`e2e4`) both work, and case does not matter when only one legal move matches. Enter checks the move. A correct move is green with ✓, is played, and the opponent's reply follows after a short pause. A legal miss is red with ✗ and "Not the best move, try again"; the board stays put. "Illegal move" is a different red message. On the last move, any checkmate counts.
+5. `F1` shows only the first move. `F2` shows the whole mate, stops the clock, and waits for a grade. Esc before grading drops the attempt. Finishing the line with no hint and no wrong move is a clean solve and flashes the celebration. `Tab` does not skip that flash. `./play --no-celebration` turns it off. From the review screen, grade yourself with `Y`, `2`, `H`, or `N`.
 
-Grades last until you quit. Nothing is written to disk yet.
+Each graded attempt is appended to `data/progress.json`.
 
 ## Puzzle pack
 
@@ -95,9 +95,9 @@ Puzzle data: [Lichess open database](https://database.lichess.org/), released un
   each graded attempt is appended to `data/progress.json` (gitignored) with points
   (solved 3/5/8 for mate in 1/2/3, second try half rounded down, hint 1, missed 0).
   Progress shows all-time and per-level totals plus this session.
-- **Week 4:** the repo is published, and the site source is `docs/` on `main`. A clean solve flashes a short ASCII celebration ([issue #1](https://github.com/oldandcodey/chess-puzzles-tui/issues/1)). `--no-celebration` turns it off.
+- **Week 4:** the repo is published, and the site source is `docs/` on `main`. A clean solve flashes a short ASCII celebration ([issue #1](https://github.com/oldandcodey/chess-puzzles-tui/issues/1)). `--no-celebration` turns it off. The puzzle screen also takes the solution directly: the move box turns on when the clock starts, and `Tab` shows the piece list.
 
-Out of scope for the Lean MVP: openings trainer, typed-move validation.
+Out of scope for the Lean MVP: openings trainer.
 
 ## License
 

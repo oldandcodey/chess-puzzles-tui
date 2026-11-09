@@ -31,9 +31,9 @@ fn reveal_and(app: &mut App, hint: bool, key: char) {
     app.enter();
     assert_eq!(app.phase, Phase::Solving);
     if hint {
-        app.on_char('h');
+        app.hint();
     }
-    app.on_char('r');
+    app.reveal();
     app.on_char(key);
 }
 
@@ -83,7 +83,7 @@ fn the_drill_celebrates_only_a_clean_solve() {
     assert!(screen.contains(&solved_id), "{screen}");
     assert!(screen.contains("mate in 1"), "{screen}");
     assert!(screen.contains("+3"), "{screen}");
-    assert!(screen.contains("any key skips"), "{screen}");
+    assert!(screen.contains("any other key skips"), "{screen}");
     assert!(
         !screen.contains("2/100"),
         "the next puzzle stays hidden until the flash ends\n{screen}"
