@@ -1,7 +1,7 @@
 //! Chess Puzzles TUI. Loads `data/puzzles.json` (relative to CWD) at startup.
 
 use std::io::{self, stdout};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
@@ -24,9 +24,11 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    let celebrate = celebrations_enabled()?;
     let pack = Pack::load(&pack_path())
         .map_err(|e| format!("{e}\n\nHint: run from the project root (use ./play)."))?;
     let mut app = App::with_progress(pack, progress_path());
+    app.set_celebrations_enabled(celebrate);
 
     enable_raw_mode().map_err(|e| e.to_string())?;
     let mut out = stdout();
@@ -46,10 +48,11 @@ fn event_loop(
     app: &mut App,
 ) -> Result<(), String> {
     while !app.quit {
+        app.tick_at(Instant::now());
         terminal
             .draw(|f| ui::draw(f, app))
             .map_err(|e| e.to_string())?;
-        // Timeout redraws the countdown without a keypress.
+        // Timeout redraws the countdown, and lets a celebration end, without a keypress.
         if !event::poll(Duration::from_millis(250)).map_err(|e| e.to_string())? {
             continue;
         }
@@ -59,6 +62,8 @@ fn event_loop(
         if key.kind != KeyEventKind::Press {
             continue;
         }
+        // Any key skips the celebration. The key is still handled below.
+        app.dismiss_celebration();
         match key.code {
             KeyCode::Esc => app.back(),
             KeyCode::Up => app.up(),
@@ -71,4 +76,25 @@ fn event_loop(
         }
     }
     Ok(())
+}
+
+fn celebrations_enabled() -> Result<bool, String> {
+    let mut enabled = true;
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--no-celebration" => enabled = false,
+            "-h" | "--help" => {
+                println!(
+                    "\
+chess-puzzles-tui
+
+  --no-celebration    do not flash the clean-solve celebration
+  -h, --help          show this help"
+                );
+                std::process::exit(0);
+            }
+            other => return Err(format!("unknown argument {other} (try --help)")),
+        }
+    }
+    Ok(enabled)
 }

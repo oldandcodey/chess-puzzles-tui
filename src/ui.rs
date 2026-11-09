@@ -83,14 +83,17 @@ pub fn draw(f: &mut Frame, app: &App) {
     ])
     .areas(f.area());
 
+    let celebrating = app.showing_celebration();
     match app.screen {
         Screen::Menu => draw_menu(f, app, body),
+        Screen::Endings if celebrating => draw_celebration(f, app, body),
         Screen::Endings => draw_endings(f, app, body),
         Screen::Progress => draw_progress(f, app, body),
     }
     f.render_widget(Paragraph::new(status_line(app)), status);
     let keys = match app.screen {
         Screen::Menu => " Up/Down Enter  E Endings  P Progress  Q/Esc Quit",
+        Screen::Endings if celebrating => " any key skips",
         Screen::Endings => match app.phase {
             Phase::Setup => " 1/2/3 level  N/B puzzle  +/- time  Enter start  Q/Esc menu",
             Phase::Solving => " H hint  R reveal  Q/Esc setup",
@@ -130,6 +133,60 @@ fn draw_menu(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(MUTED),
     )));
     f.render_widget(Paragraph::new(lines).block(block("Chess Puzzles")), area);
+}
+
+const BOX_INNER: usize = 42;
+
+fn draw_celebration(f: &mut Frame, app: &App, area: Rect) {
+    let Some(info) = app.celebration() else {
+        return;
+    };
+    let mate_in = info.mate_in;
+    let points = info.points;
+    let puzzle_id = info.puzzle_id.clone();
+    let gold = Style::default().fg(GOLD);
+    let green = Style::default().fg(GREEN).add_modifier(Modifier::BOLD);
+    let muted = Style::default().fg(MUTED);
+    let mut lines = vec![Line::from(Span::styled(box_edge(), gold))];
+    push_boxed(&mut lines, "*    *    *    *    *", gold);
+    for star in ["*", "***", "*****"] {
+        push_boxed(&mut lines, star, gold);
+    }
+    push_boxed(&mut lines, "* CLEAN SOLVE *", green);
+    for star in ["*****", "***", "*"] {
+        push_boxed(&mut lines, star, gold);
+    }
+    push_boxed(&mut lines, "*    *    *    *    *", gold);
+    push_boxed(&mut lines, "", gold);
+    push_boxed(
+        &mut lines,
+        &format!("mate in {mate_in}   +{points}"),
+        gold.add_modifier(Modifier::BOLD),
+    );
+    push_boxed(&mut lines, &puzzle_id, muted);
+    push_boxed(&mut lines, "", gold);
+    push_boxed(&mut lines, "any key skips", muted);
+    lines.push(Line::from(Span::styled(box_edge(), gold)));
+    f.render_widget(Paragraph::new(lines).block(block("Clean solve")), area);
+}
+
+fn box_edge() -> String {
+    format!("  +{}+", "=".repeat(BOX_INNER))
+}
+
+fn push_boxed(lines: &mut Vec<Line<'static>>, text: &str, style: Style) {
+    let text: String = text.chars().take(BOX_INNER).collect();
+    let pad = BOX_INNER - text.chars().count();
+    let left = pad / 2;
+    let right = pad - left;
+    let edge = Style::default().fg(GOLD);
+    lines.push(Line::from(vec![
+        Span::styled("  |", edge),
+        Span::raw(" ".repeat(left)),
+        Span::styled(text, style),
+        Span::raw(" ".repeat(right)),
+        Span::styled("|", edge),
+    ]));
 }
 
 fn draw_endings(f: &mut Frame, app: &App, area: Rect) {

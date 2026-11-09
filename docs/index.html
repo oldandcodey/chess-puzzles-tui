@@ -64,6 +64,7 @@
         <li>Amber under 10 seconds, red overtime. The clock does not auto-fail you.</li>
         <li><code>H</code> shows only the first move. <code>R</code> reveals the line and stops the clock.</li>
         <li>Self-grade: solved, second try, hint, or missed. Session tallies stay in memory until quit.</li>
+        <li>A clean solve flashes a short ASCII celebration for about a second and a half. Any key skips it. <code>--no-celebration</code> turns it off.</li>
       </ul>
     </section>
 
@@ -76,6 +77,7 @@
           <tr><td>Setup</td><td>1 / 2 / 3 level, N or Right next, B or Left previous, + / − time, Enter start</td></tr>
           <tr><td>Solving</td><td>H first-move hint, R reveal, Q or Esc back with no grade</td></tr>
           <tr><td>Review</td><td>Y solved, 2 second try, H hint, N missed</td></tr>
+          <tr><td>Celebration</td><td>After a clean solve, about a second and a half. Any key skips it.</td></tr>
           <tr><td>Progress</td><td>Q or Esc back. This session only, until saved history lands.</td></tr>
         </tbody>
       </table>
@@ -87,6 +89,7 @@
 cd chess-puzzles-tui
 chmod +x play
 ./play
+./play --no-celebration
 cargo test</pre>
       <p>The pack is <code>data/puzzles.json</code>, read relative to the working directory. <code>./play</code> cds to the project root first. Over SSH, <code>export TERM=xterm-256color</code> if the colors look off.</p>
     </section>
@@ -100,7 +103,6 @@ cargo test</pre>
       <h2>Still open</h2>
       <ul class="features">
         <li><a href="https://github.com/oldandcodey/chess-puzzles-tui/issues/2">Save progress</a> — history file, points, and per-level stats.</li>
-        <li><a href="https://github.com/oldandcodey/chess-puzzles-tui/issues/1">Celebration</a> — a short ASCII celebration after a clean solve.</li>
       </ul>
       <p>Siblings: <a href="https://oldandcodey.github.io/play-nine-tui/">Play Nine</a> and <a href="https://oldandcodey.github.io/yahtzee-tui/">Yahtzee</a>.</p>
     </section>
