@@ -199,12 +199,13 @@ fn hint_reveal_and_grade_record_a_session_attempt() {
         "no grade before the line is revealed"
     );
     assert_eq!(app.phase, Phase::Solving);
+    assert_eq!(app.move_entry().buffer(), "y");
 
-    app.on_char('h');
+    app.hint();
     assert!(app.hint_used);
     assert_eq!(app.phase, Phase::Solving);
 
-    app.on_char('r');
+    app.reveal();
     assert_eq!(app.phase, Phase::Review);
     app.on_char('2');
     assert_eq!(app.level, 1, "2 during review is a grade, not mate-in-2");
@@ -227,17 +228,17 @@ fn hint_reveal_and_grade_record_a_session_attempt() {
     );
 
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('h');
     assert_eq!(app.attempts[1].grade, Grade::Hint);
     assert_eq!(app.attempts[1].points, 1);
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('n');
     assert_eq!(app.attempts[2].grade, Grade::Missed);
     assert_eq!(app.attempts[2].points, 0);
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('y');
     assert_eq!(app.attempts[3].grade, Grade::Solved);
     assert!(!app.attempts[3].hint_used);
@@ -275,18 +276,27 @@ fn endings_screen_shows_the_board_the_piece_list_and_the_clock() {
     assert!(screen.contains("timer 1:00"), "{screen}");
     assert!(screen.contains("a1 lower left"), "{screen}");
     assert!(screen.contains("Enter"), "{screen}");
-    assert!(screen.contains("white"), "{screen}");
+    assert!(screen.contains("Tab pieces"), "{screen}");
+    assert!(
+        !screen.contains("White  "),
+        "piece list is hidden until Tab\n{screen}"
+    );
     assert!(!screen.contains("coming in week 2"), "{screen}");
+
+    app.toggle_pieces();
+    let listed = render(&app, 100, 30);
+    assert!(listed.contains("white"), "{listed}");
     // First puzzle has a white knight on e7.
-    assert!(screen.contains("e7"), "{screen}");
+    assert!(listed.contains("e7"), "{listed}");
+    app.toggle_pieces();
 
     app.enter();
-    app.on_char('h');
+    app.hint();
     let solving = render(&app, 80, 28);
     assert!(solving.contains("Hint:"), "{solving}");
-    assert!(solving.contains("H hint"), "{solving}");
+    assert!(solving.contains("F1 hint"), "{solving}");
 
-    app.on_char('r');
+    app.reveal();
     let review = render(&app, 100, 30);
     assert!(review.contains("Solution:"), "{review}");
     assert!(review.contains("1. "), "{review}");

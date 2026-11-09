@@ -379,7 +379,7 @@ fn grading_writes_one_row_and_escape_writes_nothing() {
 
     app.enter();
     assert_eq!(app.phase, Phase::Solving);
-    app.on_char('h');
+    app.hint();
     app.back();
     assert_eq!(app.phase, Phase::Setup);
     assert!(app.attempts.is_empty());
@@ -387,7 +387,7 @@ fn grading_writes_one_row_and_escape_writes_nothing() {
     assert!(!path.exists());
 
     app.enter();
-    app.on_char('r');
+    app.reveal();
     assert_eq!(app.phase, Phase::Review);
     app.back();
     assert_eq!(app.phase, Phase::Setup);
@@ -396,7 +396,7 @@ fn grading_writes_one_row_and_escape_writes_nothing() {
     assert_eq!(app.current().unwrap().id, id);
 
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('y');
     assert_eq!(app.attempts.len(), 1);
     assert_eq!(app.attempts[0].puzzle_id, id);
@@ -430,7 +430,7 @@ fn grading_writes_one_row_and_escape_writes_nothing() {
     assert_eq!(app.level, 2);
     assert_eq!(app.phase, Phase::Setup);
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('2');
     assert_eq!(app.attempts[1].mate_in, 2);
     assert_eq!(app.attempts[1].grade, Grade::SecondTry);
@@ -440,8 +440,8 @@ fn grading_writes_one_row_and_escape_writes_nothing() {
 
     app.on_char('3');
     app.enter();
-    app.on_char('h');
-    app.on_char('r');
+    app.hint();
+    app.reveal();
     app.on_char('n');
     assert_eq!(app.attempts[2].mate_in, 3);
     assert_eq!(app.attempts[2].grade, Grade::Missed);
@@ -475,7 +475,7 @@ fn app_new_does_not_touch_the_progress_file() {
     assert!(app.save_warning.is_none());
     app.on_char('e');
     app.enter();
-    app.on_char('r');
+    app.reveal();
     app.on_char('y');
     assert_eq!(app.attempts.len(), 1);
     assert_eq!(app.attempts[0].points, 3);

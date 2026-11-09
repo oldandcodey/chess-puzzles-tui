@@ -11,6 +11,7 @@ use crate::board::{
     border_line, empty_glyph, file_label, format_solution, parse_board, piece_lines, rank_caps,
     row_cells, PieceLine, BOARD_WIDTH,
 };
+use crate::moves::{Feedback, MoveMark};
 use crate::pack::Puzzle;
 use crate::progress::Totals;
 
@@ -93,11 +94,13 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(Paragraph::new(status_line(app)), status);
     let keys = match app.screen {
         Screen::Menu => " Up/Down Enter  E Endings  P Progress  Q/Esc Quit",
-        Screen::Endings if celebrating => " any key skips",
+        Screen::Endings if celebrating => " Tab pieces  any other key skips",
         Screen::Endings => match app.phase {
-            Phase::Setup => " 1/2/3 level  N/B puzzle  +/- time  Enter start  Q/Esc menu",
-            Phase::Solving => " H hint  R reveal  Q/Esc setup",
-            Phase::Review => " Y solved  2 second try  H hint  N missed  Q/Esc setup",
+            Phase::Setup => {
+                " 1/2/3 level  N/B puzzle  +/- time  Enter start  Tab pieces  Q/Esc menu"
+            }
+            Phase::Solving => " Enter check  Bksp edit  F1 hint  F2 reveal  Esc setup  Tab pieces",
+            Phase::Review => " Y solved  2 second try  H hint  N missed  Tab pieces  Q/Esc setup",
         },
         Screen::Progress => " Q/Esc back",
     };
@@ -165,7 +168,7 @@ fn draw_celebration(f: &mut Frame, app: &App, area: Rect) {
     );
     push_boxed(&mut lines, &puzzle_id, muted);
     push_boxed(&mut lines, "", gold);
-    push_boxed(&mut lines, "any key skips", muted);
+    push_boxed(&mut lines, "any other key skips", muted);
     lines.push(Line::from(Span::styled(box_edge(), gold)));
     f.render_widget(Paragraph::new(lines).block(block("Clean solve")), area);
 }
@@ -191,22 +194,39 @@ fn push_boxed(lines: &mut Vec<Line<'static>>, text: &str, style: Style) {
 
 fn draw_endings(f: &mut Frame, app: &App, area: Rect) {
     let puzzle = app.current().cloned();
+    let fen = shown_fen(app, puzzle.as_ref());
     let mut lines = vec![
         meta_line(app, puzzle.as_ref()),
-        clock_line(app, puzzle.as_ref()),
+        clock_line(app, &fen, puzzle.as_ref()),
     ];
-    match puzzle
-        .as_ref()
-        .and_then(|p| parse_board(&p.puzzle_fen).ok())
-    {
-        Some(grid) => lines.extend(board_lines(&grid)),
-        None => lines.push(Line::from(Span::styled(
+    match parse_board(&fen) {
+        Ok(grid) => {
+            let show_list = app.pieces_shown();
+            let pieces = if show_list {
+                piece_lines(&grid)
+            } else {
+                Vec::new()
+            };
+            let beside = (app.phase != Phase::Review && !show_list).then(|| entry_column(app));
+            lines.extend(board_lines(&grid, &pieces, beside.as_deref()));
+            if app.phase != Phase::Review && show_list {
+                lines.push(Line::from(""));
+                lines.extend(entry_lines(app));
+            }
+        }
+        Err(_) => lines.push(Line::from(Span::styled(
             "  No puzzle at this level.",
             Style::default().fg(TEXT),
         ))),
     }
-    lines.push(instruction_line(app, puzzle.as_ref()));
+    if app.phase == Phase::Setup {
+        lines.push(Line::from(Span::styled(
+            "  a1 lower left.",
+            Style::default().fg(MUTED),
+        )));
+    }
     if app.phase == Phase::Review {
+        lines.push(instruction_line(app, puzzle.as_ref()));
         if let Some(blurb) = puzzle.as_ref().and_then(|p| theme_blurb(&p.themes)) {
             lines.push(Line::from(Span::styled(
                 format!("  {blurb}"),
@@ -216,6 +236,14 @@ fn draw_endings(f: &mut Frame, app: &App, area: Rect) {
     }
     lines.push(session_line(app));
     f.render_widget(Paragraph::new(lines).block(block("Endings")), area);
+}
+
+fn shown_fen(app: &App, puzzle: Option<&Puzzle>) -> String {
+    if app.phase == Phase::Review {
+        puzzle.map(|p| p.puzzle_fen.clone()).unwrap_or_default()
+    } else {
+        app.move_entry().fen()
+    }
 }
 
 fn meta_line(app: &App, puzzle: Option<&Puzzle>) -> Line<'static> {
@@ -234,12 +262,19 @@ fn meta_line(app: &App, puzzle: Option<&Puzzle>) -> Line<'static> {
     ])
 }
 
-fn clock_line(app: &App, puzzle: Option<&Puzzle>) -> Line<'static> {
-    let (side, side_color) = match puzzle.map(|p| p.side_to_move.as_str()) {
-        Some("white") => ("WHITE TO MOVE".to_string(), GOLD),
-        Some("black") => ("BLACK TO MOVE".to_string(), CYAN),
-        Some(other) => (other.to_string(), TEXT),
-        None => ("NO PUZZLE".to_string(), MUTED),
+fn clock_line(app: &App, fen: &str, puzzle: Option<&Puzzle>) -> Line<'static> {
+    let active = fen.split_whitespace().nth(1).or_else(|| {
+        puzzle.map(|p| match p.side_to_move.as_str() {
+            "white" => "w",
+            "black" => "b",
+            _ => "",
+        })
+    });
+    let (side, side_color) = match active {
+        Some("w") => ("WHITE TO MOVE".to_string(), GOLD),
+        Some("b") => ("BLACK TO MOVE".to_string(), CYAN),
+        Some(other) if !other.is_empty() => (other.to_string(), TEXT),
+        _ => ("NO PUZZLE".to_string(), MUTED),
     };
     let (clock, clock_color) = clock_text(app);
     Line::from(vec![
@@ -272,8 +307,11 @@ fn clock_text(app: &App) -> (String, Color) {
     }
 }
 
-fn board_lines(grid: &[[Option<char>; 8]; 8]) -> Vec<Line<'static>> {
-    let pieces = piece_lines(grid);
+fn board_lines(
+    grid: &[[Option<char>; 8]; 8],
+    pieces: &[PieceLine],
+    side: Option<&[Vec<Span<'static>>]>,
+) -> Vec<Line<'static>> {
     let mut rows: Vec<Vec<Span<'static>>> = Vec::new();
     rows.push(vec![Span::styled(format!("  {}", file_label()), muted())]);
     rows.push(vec![Span::styled(format!("  {}", border_line()), muted())]);
@@ -302,6 +340,9 @@ fn board_lines(grid: &[[Option<char>; 8]; 8]) -> Vec<Line<'static>> {
         if let Some(piece) = pieces.get(i) {
             spans.push(Span::raw("  "));
             spans.push(Span::styled(piece.text.clone(), piece_style(piece)));
+        } else if let Some(extra) = side.and_then(|rows| rows.get(i)) {
+            spans.push(Span::raw("  "));
+            spans.extend(extra.clone());
         }
         lines.push(Line::from(spans));
     }
@@ -345,6 +386,162 @@ fn piece_style(line: &PieceLine) -> Style {
     }
 }
 
+const FIELD_BG: Color = Color::Rgb(30, 34, 42);
+const FIELD_INNER: usize = 12;
+
+struct EntryCopy {
+    log: Vec<Span<'static>>,
+    field: Vec<Span<'static>>,
+    message: Vec<Span<'static>>,
+    extra: Vec<Span<'static>>,
+}
+
+fn entry_copy(app: &App) -> EntryCopy {
+    let entry = app.move_entry();
+    let log = if entry.log().is_empty() {
+        vec![Span::styled("(none yet)", Style::default().fg(MUTED))]
+    } else {
+        let mut spans = Vec::new();
+        for (i, mv) in entry.log().iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw("   "));
+            }
+            let (color, mark) = match mv.mark {
+                MoveMark::Correct => (GREEN, "✓"),
+                MoveMark::Wrong | MoveMark::Illegal => (RED, "✗"),
+            };
+            spans.push(Span::styled(
+                format!("{} {mark}", mv.text),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
+        }
+        spans
+    };
+
+    let message = match entry.feedback() {
+        Feedback::Illegal => vec![Span::styled(
+            "Illegal move",
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        )],
+        Feedback::Wrong => vec![Span::styled(
+            "Not the best move, try again",
+            Style::default().fg(RED),
+        )],
+        Feedback::None if app.phase == Phase::Setup => vec![Span::styled(
+            "Type a move, then Enter. Enter starts the clock.",
+            Style::default().fg(MUTED),
+        )],
+        Feedback::None if app.phase == Phase::Solving && app.elapsed_secs() >= app.timer_secs => {
+            vec![Span::styled(
+                "Time is up. F2 reveals the line when you want to grade it.",
+                Style::default().fg(TEXT),
+            )]
+        }
+        Feedback::None if app.phase == Phase::Solving => vec![Span::styled(
+            "Type a move and press Enter.",
+            Style::default().fg(MUTED),
+        )],
+        Feedback::None => Vec::new(),
+    };
+
+    let mut extra = Vec::new();
+    if let Some(reply) = entry.reply() {
+        extra.push(Span::styled(
+            format!("{} played {}", reply.side, reply.san),
+            Style::default().fg(MUTED),
+        ));
+    }
+    if app.hint_used && app.phase == Phase::Solving {
+        let hint = app
+            .current()
+            .and_then(|p| p.solution_san.first().cloned())
+            .unwrap_or_else(|| "?".into());
+        let hint_span = Span::styled(
+            format!("Hint: {hint}  (the rest stays hidden)"),
+            Style::default().fg(TEXT),
+        );
+        if extra.is_empty() {
+            extra.push(hint_span);
+        } else {
+            extra.push(Span::raw("   "));
+            extra.push(hint_span);
+        }
+    }
+
+    EntryCopy {
+        log,
+        field: field_spans(entry.buffer(), entry.rejected()),
+        message,
+        extra,
+    }
+}
+
+fn field_spans(buffer: &str, rejected: bool) -> Vec<Span<'static>> {
+    let bg = Style::default().bg(FIELD_BG);
+    let text_color = if rejected { RED } else { TEXT };
+    let mut spans = vec![Span::styled("[", bg.fg(MUTED))];
+    if !buffer.is_empty() {
+        spans.push(Span::styled(
+            buffer.to_string(),
+            bg.fg(text_color).add_modifier(Modifier::BOLD),
+        ));
+    }
+    spans.push(Span::styled(" ", Style::default().bg(GOLD)));
+    let used = buffer.chars().count() + 1;
+    let pad = FIELD_INNER.saturating_sub(used);
+    if pad > 0 {
+        spans.push(Span::styled(" ".repeat(pad), bg));
+    }
+    spans.push(Span::styled("]", bg.fg(MUTED)));
+    spans
+}
+
+fn entry_column(app: &App) -> Vec<Vec<Span<'static>>> {
+    let copy = entry_copy(app);
+    let mut rows = vec![Vec::new(); 12];
+    rows[0] = vec![Span::styled(
+        "Solution",
+        Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
+    )];
+    rows[2] = copy.log;
+    rows[4] = vec![Span::styled(
+        "Move",
+        Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
+    )];
+    rows[5] = copy.field;
+    rows[7] = copy.message;
+    rows[8] = copy.extra;
+    rows
+}
+
+fn entry_lines(app: &App) -> Vec<Line<'static>> {
+    let copy = entry_copy(app);
+    let mut lines = Vec::new();
+    let mut solution = vec![Span::styled(
+        "  Solution  ",
+        Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
+    )];
+    solution.extend(copy.log);
+    lines.push(Line::from(solution));
+    let mut field = vec![Span::styled(
+        "  Move  ",
+        Style::default().fg(GOLD).add_modifier(Modifier::BOLD),
+    )];
+    field.extend(copy.field);
+    lines.push(Line::from(field));
+    if !copy.message.is_empty() {
+        let mut message = vec![Span::raw("  ")];
+        message.extend(copy.message);
+        lines.push(Line::from(message));
+    }
+    if !copy.extra.is_empty() {
+        let mut extra = vec![Span::raw("  ")];
+        extra.extend(copy.extra);
+        lines.push(Line::from(extra));
+    }
+    lines
+}
+
 fn instruction_line(app: &App, puzzle: Option<&Puzzle>) -> Line<'static> {
     let elapsed = app.elapsed_secs();
     let text = match app.phase {
@@ -359,9 +556,9 @@ fn instruction_line(app: &App, puzzle: Option<&Puzzle>) -> Line<'static> {
             format!("Hint: {mv}  (the rest stays hidden)")
         }
         Phase::Solving if elapsed >= app.timer_secs => {
-            "Time is up. R reveals the line when you want to grade it.".to_string()
+            "Time is up. F2 reveals the line when you want to grade it.".to_string()
         }
-        Phase::Solving => "Clock is running. Solve it on your board.".to_string(),
+        Phase::Solving => "Type a move and press Enter.".to_string(),
         Phase::Review => {
             let sol = puzzle
                 .map(|p| format_solution(&p.solution_san))

@@ -90,8 +90,8 @@ pub fn row_cells(board: &[[Option<char>; 8]; 8], row: usize) -> [CellView; 8] {
         piece: None,
         light: false,
     }; 8];
-    for file in 0..8 {
-        cells[file] = CellView {
+    for (file, cell) in cells.iter_mut().enumerate() {
+        *cell = CellView {
             piece: board[row][file],
             light: square_is_light(file, rank),
         };
